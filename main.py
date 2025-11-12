@@ -4,8 +4,6 @@ import logging
 from dotenv import load_dotenv
 import os
 import random
-from flask import Flask
-import threading
 from PIL import Image
 
 load_dotenv()
