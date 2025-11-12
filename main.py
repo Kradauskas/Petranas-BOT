@@ -13,8 +13,12 @@ app = Flask('')
 def home():
     return "Petranas bot gyvas"
 def run():
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host='0.0.0.0', port=8080, debug=False, use_reloader=False)
 threading.Thread(target=run).start()
+@bot.event
+async def on_ready():
+    if not hasattr(bot, 'ready_once'):
+        bot.ready_once = True
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -31,7 +35,7 @@ VIDEO_FOLDER = "video"
 
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
 os.makedirs(VIDEO_FOLDER, exist_ok=True)
-
+        
 @bot.event
 async def on_ready():
     print(f"We are ready to go in, {bot.user.name}")
