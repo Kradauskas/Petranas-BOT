@@ -4,7 +4,17 @@ import logging
 from dotenv import load_dotenv
 import os
 import random
+from flask import Flask
+import threading
 from PIL import Image
+
+app = Flask('')
+@app.route('/')
+def home():
+    return "Petranas bot gyvas"
+def run():
+    app.run(host='0.0.0.0', port=8080)
+threading.Thread(target=run).start()
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
