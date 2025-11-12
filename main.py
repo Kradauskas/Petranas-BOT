@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import os
 import random
 from PIL import Image
+import uuid
+
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -34,12 +36,23 @@ async def addpete(ctx):
 
     for attachment in ctx.message.attachments:
         if any(attachment.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif']):
-            file_path = os.path.join(IMAGE_FOLDER, attachment.filename)
+            # Sukuriamas unikalus pavadinimas
+            unique_name = f"{uuid.uuid4().hex}_{attachment.filename}"
+            file_path = os.path.join(IMAGE_FOLDER, unique_name)
+
+            # Išsaugome failą
             await attachment.save(file_path)
-            await ctx.send(f"✅ Nuotrauka **{attachment.filename}** pridėta į Petės biblioteką!")
+
+            # Patikriname dydį (pvz. limitas 10 MB)
+            max_size_mb = 10
+            if os.path.getsize(file_path) > max_size_mb * 1024 * 1024:
+                os.remove(file_path)
+                await ctx.send(f"⚠️ Failas per didelis! (maksimalus dydis {max_size_mb} MB)")
+                return
+
+            await ctx.send(f"✅ Nuotrauka **{attachment.filename}** pridėta į Petės biblioteką kaip `{unique_name}`!")
         else:
             await ctx.send("⚠️ Šis failas nėra palaikomas (naudok .png, .jpg, .jpeg arba .gif)")
-
 @bot.command()
 async def addmp4(ctx):
     if not ctx.message.attachments:
@@ -48,11 +61,24 @@ async def addmp4(ctx):
 
     for attachment in ctx.message.attachments:
         if any(attachment.filename.lower().endswith(ext) for ext in ['.mp4', '.mov', '.gif']):
-            file_path = os.path.join(VIDEO_FOLDER, attachment.filename)
+            # Sukuriamas unikalus pavadinimas
+            unique_name = f"{uuid.uuid4().hex}_{attachment.filename}"
+            file_path = os.path.join(VIDEO_FOLDER, unique_name)
+
+            # Išsaugome failą
             await attachment.save(file_path)
-            await ctx.send(f"🎞️ Video **{attachment.filename}** pridėtas į biblioteką!")
+
+            # Patikriname dydį (pvz. limitas 30 MB)
+            max_size_mb = 30
+            if os.path.getsize(file_path) > max_size_mb * 1024 * 1024:
+                os.remove(file_path)
+                await ctx.send(f"⚠️ Video failas per didelis! (maksimalus dydis {max_size_mb} MB)")
+                return
+
+            await ctx.send(f"🎞️ Video **{attachment.filename}** pridėtas į biblioteką kaip `{unique_name}`!")
         else:
             await ctx.send("⚠️ Šis failas nėra palaikomas (naudok .mp4, .mov arba .gif)")
+
 
 @bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
