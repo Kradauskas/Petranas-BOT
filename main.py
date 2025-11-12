@@ -25,10 +25,7 @@ os.makedirs(VIDEO_FOLDER, exist_ok=True)
 @bot.event
 async def on_ready():
     print(f"We are ready to go in, {bot.user.name}")
-
-# -------------------------------
-# .addpete – leidžia įkelti naują nuotrauką
-# -------------------------------
+        
 @bot.command()
 async def addpete(ctx):
     if not ctx.message.attachments:
@@ -43,9 +40,6 @@ async def addpete(ctx):
         else:
             await ctx.send("⚠️ Šis failas nėra palaikomas (naudok .png, .jpg, .jpeg arba .gif)")
 
-# -------------------------------
-# .addmp4 – leidžia įkelti video failą
-# -------------------------------
 @bot.command()
 async def addmp4(ctx):
     if not ctx.message.attachments:
@@ -60,9 +54,6 @@ async def addmp4(ctx):
         else:
             await ctx.send("⚠️ Šis failas nėra palaikomas (naudok .mp4, .mov arba .gif)")
 
-# -------------------------------
-# Esamos .pete ir .mp4 komandos
-# -------------------------------
 @bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def pete(ctx):
