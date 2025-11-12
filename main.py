@@ -8,13 +8,6 @@ from flask import Flask
 import threading
 from PIL import Image
 
-app = Flask('')
-@app.route('/')
-def home():
-    return "Petranas bot gyvas"
-def run():
-    app.run(host='0.0.0.0', port=8080, debug=False, use_reloader=False)
-threading.Thread(target=run).start()
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
 
@@ -24,11 +17,6 @@ intents.message_content = True
 intents.members = True
 
 bot = commands.Bot(command_prefix='.', intents=intents)
-
-@bot.event
-async def on_ready():
-    if not hasattr(bot, 'ready_once'):
-        bot.ready_once = True
 
 IMAGE_FOLDER = "images"
 VIDEO_FOLDER = "video"
