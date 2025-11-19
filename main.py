@@ -33,7 +33,7 @@ async def on_ready():
 @bot.command()
 async def addpete(ctx):
     if not ctx.message.attachments:
-        await ctx.send("❌ Įkelk paveiksliuką kartu su komanda! (.addpete + prisegtas failas)")
+        await ctx.send(".addpete +foto)")
         return
     for attachment in ctx.message.attachments:
         if any(attachment.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif']):
@@ -52,7 +52,7 @@ async def addpete(ctx):
 @bot.command()
 async def addmp4(ctx):
     if not ctx.message.attachments:
-        await ctx.send("❌ Įkelk video failą kartu su komanda! (.addmp4 + prisegtas failas)")
+        await ctx.send(".addmp4 +video")
         return
     for attachment in ctx.message.attachments:
         if any(attachment.filename.lower().endswith(ext) for ext in ['.mp4', '.mov', '.gif']):
@@ -74,7 +74,7 @@ async def pete(ctx):
     global last_images
     images = [f for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
     if not images:
-        await ctx.send("Bibliotekoje nėra jokių Petės nuotraukų 😔")
+        await ctx.send("Nera fotkiu")
         return
     available = [img for img in images if img not in last_images] or images
     chosen_image = secrets.choice(available)
@@ -87,7 +87,7 @@ async def pete(ctx):
         img = img.resize((500, 500))
         img.save(resized_path)
     await ctx.send(f"pasiimk krw {ctx.author.mention}", silent=True)
-    await ctx.send(file=discord.File(resized_path))
+    await ctx.send(file=discord.File(resized_path), silent=True)
     os.remove(resized_path)
 
 @pete.error
@@ -109,7 +109,7 @@ async def mp4(ctx):
     if len(last_videos) > 3:
         last_videos.pop(0)
     video_path = os.path.join(VIDEO_FOLDER, chosen_video)
-    await ctx.send(file=discord.File(video_path))
+    await ctx.send(file=discord.File(video_path, silent=True))
 
 @mp4.error
 async def mp4_error(ctx, error):
