@@ -109,7 +109,7 @@ async def mp4(ctx):
     if len(last_videos) > 3:
         last_videos.pop(0)
     video_path = os.path.join(VIDEO_FOLDER, chosen_video)
-    await ctx.send(file=discord.File(video_path, silent=True))
+    await ctx.send(file=discord.File(video_path), silent=True)
 
 @mp4.error
 async def mp4_error(ctx, error):
