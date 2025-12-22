@@ -1,4 +1,11 @@
+<<<<<<< HEAD
 .env
 __pycache__/
 *.pyc
 discord.log
+=======
+.env
+__pycache__/
+*.pyc
+discord.log
+>>>>>>> f52fdf83efc202de282140476f9aad9845b0258e
