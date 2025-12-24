@@ -8,6 +8,8 @@ import time
 import json
 from PIL import Image, ImageEnhance
 
+from commands.economy import add_user_coins
+
 ROLLS_FOLDER = "rolls"
 OVERLAYS_FOLDER = "overlays"
 INVENTORY_FILE = "inventory.json"
@@ -16,6 +18,38 @@ INVENTORY_FILE = "inventory.json"
 # =========================
 # INVENTORY SYSTEM
 # =========================
+def roll_specific_rarity(user_id: str, rarity: str):
+    rarity_folder = os.path.join(ROLLS_FOLDER, rarity)
+
+    if not os.path.exists(rarity_folder):
+        return None, None, "Rarity folderis nerastas"
+
+    images = [
+        f for f in os.listdir(rarity_folder)
+        if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))
+    ]
+
+    if not images:
+        return None, None, "Nėra paveikslėlių"
+
+    chosen_image = secrets.choice(images)
+
+    inventory = load_inventory()
+    is_duplicate = has_duplicate(
+        inventory,
+        user_id,
+        chosen_image,
+        rarity
+    )
+
+    if not is_duplicate:
+        inventory.setdefault(user_id, []).append({
+            "image": chosen_image,
+            "rarity": rarity
+        })
+        save_inventory(inventory)
+
+    return chosen_image, is_duplicate, None
 
 def load_inventory():
     if not os.path.exists(INVENTORY_FILE):
@@ -196,6 +230,13 @@ def setup_roll_commands(bot: commands.Bot):
                     "rarity": rarity
                 })
                 save_inventory(inventory)
+            else:
+                add_user_coins(user_id, 100)  # refund for duplicate
+                embed=discord.Embed(
+                    title="💰 Gavai 100 coins už duplicate",
+                    color=0xFFFF00
+                    )
+                await ctx.send(embed=embed, silent=True)
 
         except Exception as e:
             print("ROLL ERROR:", repr(e))

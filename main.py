@@ -29,9 +29,11 @@ last_videos = []
 
 from commands.Rolling import setup_roll_commands
 from commands.MainFunctions import setup_pete_commands
+from commands.CoinFunctions import setup_shop_commands
 
 setup_roll_commands(bot)
 setup_pete_commands(bot)
+setup_shop_commands(bot)
 
 @bot.event
 async def on_ready():
