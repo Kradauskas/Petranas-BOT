@@ -6,9 +6,10 @@ import random
 import secrets
 import time
 import json
+import datetime
 from PIL import Image, ImageEnhance
 
-from commands.economy import add_user_coins
+from commands.economy import add_user_coins 
 
 ROLLS_FOLDER = "rolls"
 OVERLAYS_FOLDER = "overlays"
@@ -343,9 +344,11 @@ def setup_roll_commands(bot: commands.Bot):
     async def roll_error(ctx: commands.Context, error):
         if isinstance(error, commands.CommandOnCooldown):
             next_time = int(time.time() + error.retry_after)
-            embed=discord.Embed(
+            embed = discord.Embed(
                 title="COOLDOWN",
-                description=f"galesi naudoti komandą po {error.retry_after:.1f} sekundžių",
+                description=f"Galėsi naudoti komandą {discord.utils.format_dt(datetime.datetime.fromtimestamp(next_time), style='R')}",
                 color=0x000000
-                )
-            await ctx.send(embed=embed, silent=True)
+            )
+            await ctx.send(embed=embed)
+
+
