@@ -152,6 +152,7 @@ def has_duplicate(inventory, user_id, image, rarity):
 # =========================
 # COMMANDS
 # =========================
+RARITY_ORDER = [rarity for rarity, _ in reversed(RARITIES)]
 
 def setup_roll_commands(bot: commands.Bot):
 
@@ -247,6 +248,55 @@ def setup_roll_commands(bot: commands.Bot):
             if 'temp_path' in locals() and os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    class InventoryView(discord.ui.View):
+        def __init__(self, items, target):
+            super().__init__(timeout=120)
+            self.items = items
+            self.index = 0
+            self.target = target
+
+        def get_embed(self):
+            item = self.items[self.index]
+
+            name = os.path.splitext(item["image"])[0]
+
+            embed = discord.Embed(
+                title=f"🎒 {self.target.display_name} inventorius",
+                description=f"**{item['rarity'].upper()} - `{name}`**",
+                color=0x000000
+            )
+
+            embed.set_author(
+                name=self.target.display_name,
+                icon_url=self.target.avatar.url if self.target.avatar else self.target.default_avatar.url
+            )
+
+            embed.set_footer(text=f"{self.index + 1} / {len(self.items)}")
+            embed.set_image(url=f"attachment://{item['image']}")
+
+            return embed
+
+        @discord.ui.button(label="⬅️", style=discord.ButtonStyle.secondary)
+        async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if interaction.user != self.target:
+                return
+
+            self.index = (self.index - 1) % len(self.items)
+            await interaction.response.edit_message(
+                embed=self.get_embed(),
+                attachments=[discord.File(self.items[self.index]["path"])]
+            )
+
+        @discord.ui.button(label="➡️", style=discord.ButtonStyle.secondary)
+        async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if interaction.user != self.target:
+                return
+
+            self.index = (self.index + 1) % len(self.items)
+            await interaction.response.edit_message(
+                embed=self.get_embed(),
+                attachments=[discord.File(self.items[self.index]["path"])]
+            )
 
 
     # -----------------------------
@@ -256,49 +306,42 @@ def setup_roll_commands(bot: commands.Bot):
     async def inventory(ctx: commands.Context, member: discord.Member | None = None):
         inventory = load_inventory()
 
-    # jei nepaminėjo – naudojam autorių
         target = member or ctx.author
         user_id = str(target.id)
 
-        if user_id not in inventory or len(inventory[user_id]) == 0:
-            embed=discord.Embed(
+        if user_id not in inventory or not inventory[user_id]:
+            embed = discord.Embed(
                 title="❌ Tuščias inventorius!",
                 description=f"{target.mention} nieko neturi...",
                 color=0x000000
-                )
+            )
             await ctx.send(embed=embed)
             return
 
-    # susigrupuoja pagal rarity
-        grouped = {}
-        for item in inventory[user_id]:
-            grouped.setdefault(item["rarity"], []).append(item["image"])
+        items = []
 
-        order = ["mythic", "legendary", "epic", "rare", "uncommon", "common"]
+        for rarity in RARITY_ORDER:
+            for item in inventory[user_id]:
+                if item["rarity"] == rarity:
+                    path = os.path.join(ROLLS_FOLDER, rarity, item["image"])
+                    if os.path.exists(path):
+                        items.append({
+                            "rarity": rarity,
+                            "image": item["image"],
+                            "path": path
+                        })
 
-        embed=discord.Embed(
-            title=f"🎒 inventorius: ",
-            color=0x000000
-            )
-        
-        embed.set_author(
-            name=target.display_name,
-            icon_url=target.avatar.url if target.avatar else target.default_avatar.url
-           )
+        if not items:
+            await ctx.send("❌ Nerasta jokių failų.")
+            return
 
-        for rarity in order:
-            if rarity not in grouped:
-                continue
+        view = InventoryView(items, target)
 
-            names = [os.path.splitext(img)[0] for img in grouped[rarity]]
-            names_str = ", ".join(f"`{n}`" for n in names)
-
-            embed.add_field(
-                name=f"{rarity.upper()} ({len(names)})",
-                value=names_str,
-                inline=False
-                )
-        await ctx.send(embed=embed)
+        await ctx.send(
+            embed=view.get_embed(),
+            file=discord.File(items[0]["path"]),
+            view=view
+        )
 
 
     # -----------------------------
@@ -308,34 +351,38 @@ def setup_roll_commands(bot: commands.Bot):
     async def view(ctx: commands.Context, name: str):
         name = name.lower()
 
-        # ieškom per visus rarity folders
         for rarity, _ in RARITIES:
             folder = os.path.join(ROLLS_FOLDER, rarity)
 
-            # 1) bandome tikslų failo vardą
-            exact_path = os.path.join(folder, name)
-            if os.path.exists(exact_path):
-                await ctx.send(file=discord.File(exact_path), silent=True)
-                return
+            if not os.path.exists(folder):
+                continue
 
-            # 2) bandome su .png/.jpg/.jpeg
-            for ext in ("png", "jpg", "jpeg", "gif"):
-                candidate = os.path.join(folder, f"{name}.{ext}")
-                if os.path.exists(candidate):
-                    embed=discord.Embed(
-                        title="📸  Peržiūra",
+            for file in os.listdir(folder):
+                file_name, ext = os.path.splitext(file)
+
+                if file_name.lower() == name and ext.lower() in (".png", ".jpg", ".jpeg", ".gif"):
+                    file_path = os.path.join(folder, file)
+
+                    embed = discord.Embed(
+                        title="📸 Peržiūra",
                         color=0x000000
-                        )
-                    embed.set_image(url=f"attachment://{os.path.basename(candidate)}")
-                    await ctx.send(embed=embed, file=discord.File(candidate), silent=True)
+                    )
+                    embed.set_image(url=f"attachment://{file}")
+
+                    await ctx.send(
+                        embed=embed,
+                        file=discord.File(file_path),
+                        silent=True
+                    )
                     return
-        
-        embed=discord.Embed(
+
+        embed = discord.Embed(
             title="❌ Nuotrauka nerasta!",
             description="Patikrink pavadinimą ir bandyk dar kartą.",
             color=0x000000
-            )
+        )
         await ctx.send(embed=embed)
+
 
     # -----------------------------
     # cooldown error

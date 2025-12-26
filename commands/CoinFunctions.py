@@ -32,18 +32,6 @@ SHOP_ITEMS = {
     "random common": 10
 }
 
-ITEM_POOL = {
-    "mythic": ["🔥 Dragon", "🌌 God Blade"],
-    "epic": ["⚡ Thunder Sword", "🧿 Magic Eye"],
-    "legendary": ["👑 Crown", "🗡️ Excalibur"],
-    "rare": ["🏹 Bow", "🛡️ Shield"],
-    "uncommon": ["🔮 Orb", "📜 Scroll"],
-    "common": ["🍎 Apple", "🪨 Stone"]
-}
-
-def get_random_item_by_rarity(rarity):
-    return random.choice(ITEM_POOL[rarity])
-
 def get_fake_roll_image(rarity: str):
     folder = os.path.join(ROLLS_FOLDER, rarity)
     images = [
@@ -89,7 +77,7 @@ def setup_shop_commands(bot):
 
         PRICE_LIST = {
             "random mythic": 100000,
-            "random legendary": 1000,
+            "random legendary": 10000,
             "random epic": 2500,
             "random rare": 500,
             "random uncommon": 100,

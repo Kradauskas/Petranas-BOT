@@ -20,10 +20,26 @@ def setup_pete_commands(bot):
     @bot.command()
     async def help(ctx):
         embed = discord.Embed(
-            title="  **⚙️KOMANDŲ LISTAS⚙️**\n\n**NAUJA:**", 
-            description="**• `.roll` **- traukia random kortelę\n• **`.view`** imageName - leidžia peržiūrėti nuotraukas\n**• `.inventory`username** (blank if your own inventory) - parodo kurias korteles turi",
+            title="  **⚙️KOMANDŲ LISTAS⚙️**\n\n**NAUJA:**",
+            description=
+                "**NAUJA:**\n"
+                "**GAMBLING UPDATE\n**"
+                "Naujos komandos:\n"
+                "• `.gamble` – parodo žaidimų sąrašą\n"
+                "• `.cf <suma>` – Coin Flip (x2)\n"
+                "• `.dr <suma>` – Dice Roll (x4)\n"
+                "• `.sm <suma>` – Slot Machine (x10)\n\n"
+                "**PAGRINDINĖS KOMANDOS**\n\n"
+                "• `.mp4` – random video\n"
+                "• `.pete` – random nuotrauka\n"
+                "• `.roll` – traukia random kortelę\n"
+                "• `.inventory` **username** – parodo kurias korteles turi\n"
+                "• `.view imageName` – leidžia peržiūrėti nuotraukas\n"
+                "**PRIDĖJIMO KOMANDOS**\n\n"
+                "• `.addmp4` + video – įkelia video į kolekciją\n"
+                "• `.addpete` + foto – įkelia nuotrauką į kolekciją\n",
             color=0x000000
-            )
+        )
         embed.add_field(
             name="PAGRINDINĖS KOMANDOS:",
             value=(
