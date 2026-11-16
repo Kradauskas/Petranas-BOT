@@ -63,8 +63,10 @@ def load_inventory():
             return {}
 
 def save_inventory(data):
-    with open(INVENTORY_FILE, "w", encoding="utf-8") as f:
+    tmp = INVENTORY_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
+    os.replace(tmp, INVENTORY_FILE)
 
 
 # =========================
@@ -249,8 +251,9 @@ def setup_roll_commands(bot: commands.Bot):
                 os.remove(temp_path)
 
     class InventoryView(discord.ui.View):
-        def __init__(self, items, target):
+        def __init__(self, items, target, owner_id):
             super().__init__(timeout=120)
+            self.owner_id = owner_id
             self.items = items
             self.index = 0
             self.target = target
@@ -260,25 +263,27 @@ def setup_roll_commands(bot: commands.Bot):
 
             name = os.path.splitext(item["image"])[0]
 
+            style = RARITY_STYLE.get(item["rarity"], {"emoji": "❓", "color": 0x000000})
             embed = discord.Embed(
                 title=f"🎒 {self.target.display_name} inventorius",
-                description=f"**{item['rarity'].upper()} - `{name}`**",
-                color=0x000000
+                description=f"{style['emoji']} **{item['rarity'].upper()}** – `{name}`",
+                color=style["color"]
             )
 
             embed.set_author(
                 name=self.target.display_name,
-                icon_url=self.target.avatar.url if self.target.avatar else self.target.default_avatar.url
+                icon_url=self.target.display_avatar.url
             )
 
-            embed.set_footer(text=f"{self.index + 1} / {len(self.items)}")
+            embed.set_footer(text=f"Kortelė {self.index + 1} / {len(self.items)}")
             embed.set_image(url=f"attachment://{item['image']}")
 
             return embed
 
         @discord.ui.button(label="⬅️", style=discord.ButtonStyle.secondary)
         async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
-            if interaction.user != self.target:
+            if interaction.user.id != self.owner_id:
+                await interaction.response.send_message("Čia ne tavo inventorius 👀", ephemeral=True)
                 return
 
             self.index = (self.index - 1) % len(self.items)
@@ -289,7 +294,8 @@ def setup_roll_commands(bot: commands.Bot):
 
         @discord.ui.button(label="➡️", style=discord.ButtonStyle.secondary)
         async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
-            if interaction.user != self.target:
+            if interaction.user.id != self.owner_id:
+                await interaction.response.send_message("Čia ne tavo inventorius 👀", ephemeral=True)
                 return
 
             self.index = (self.index + 1) % len(self.items)
@@ -335,7 +341,7 @@ def setup_roll_commands(bot: commands.Bot):
             await ctx.send("❌ Nerasta jokių failų.")
             return
 
-        view = InventoryView(items, target)
+        view = InventoryView(items, target, ctx.author.id)
 
         await ctx.send(
             embed=view.get_embed(),
@@ -382,20 +388,3 @@ def setup_roll_commands(bot: commands.Bot):
             color=0x000000
         )
         await ctx.send(embed=embed)
-
-
-    # -----------------------------
-    # cooldown error
-    # -----------------------------
-    @roll.error
-    async def roll_error(ctx: commands.Context, error):
-        if isinstance(error, commands.CommandOnCooldown):
-            next_time = int(time.time() + error.retry_after)
-            embed = discord.Embed(
-                title="COOLDOWN",
-                description=f"Galėsi naudoti komandą {discord.utils.format_dt(datetime.datetime.fromtimestamp(next_time), style='R')}",
-                color=0x000000
-            )
-            await ctx.send(embed=embed)
-
-

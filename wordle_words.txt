@@ -1,0 +1,9 @@
+# Wordle žodžiai / frazės (.wordle)
+# Viena eilutė = vienas žodis arba frazė. Eilutės su # ignoruojamos.
+# Lietuviškos raidės (ą, č, ė, š, ž...) žaidime virsta paprastomis (a, c, e, s, z).
+# Naujų galima pridėti ir per Discord: .addword <frazė> (tik ownerio komanda)
+sweikhi
+lohai
+grizhau
+as grizhau
+sweikhi lohai

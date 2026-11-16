@@ -16,8 +16,11 @@ def load_data():
         return {}
 
 def save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
+    # Write to a temp file first so a crash mid-write can't wipe everyone's coins
+    tmp = DATA_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
+    os.replace(tmp, DATA_FILE)
 
 def ensure_user(data, user_id):
     if user_id not in data:
@@ -49,3 +52,19 @@ def add_item_to_inventory(user_id, item):
     ensure_user(data, user_id)
     data[user_id]["inventory"].append(item)
     save_data(data)
+
+
+def get_user_field(user_id, field, default=None):
+    data = load_data()
+    return data.get(user_id, {}).get(field, default)
+
+def set_user_field(user_id, field, value):
+    data = load_data()
+    ensure_user(data, user_id)
+    data[user_id][field] = value
+    save_data(data)
+
+def top_users(limit=10):
+    data = load_data()
+    ranked = sorted(data.items(), key=lambda kv: kv[1].get("coins", 0), reverse=True)
+    return [(uid, info.get("coins", 0)) for uid, info in ranked[:limit]]

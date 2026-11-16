@@ -8,3 +8,6 @@ discord.log
 # Runtime data - lives on the server, not in git
 data/users.json
 inventory.json
+data/*.json
+*.tmp
+temp_*.png
