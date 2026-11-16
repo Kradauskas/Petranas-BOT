@@ -1,12 +1,15 @@
 """Petras Wordle — guess the iconic phrase in 6 tries."""
 import asyncio
+import io
 import json
 import os
 import random
 import unicodedata
+from functools import lru_cache
 
 import discord
 from discord.ext import commands
+from PIL import Image, ImageDraw, ImageFont
 
 from .economy import add_user_coins
 from .ui import make_embed, success, error, owner_only, BRAND, SUCCESS, ERROR, DARK
@@ -21,7 +24,6 @@ GUESS_TIMEOUT = 300          # seconds of silence before the game ends
 REWARD_PER_TRY_LEFT = 50     # win on try 1 = 300 coins, try 6 = 50 coins
 
 GREEN, YELLOW, GRAY = "🟩", "🟨", "⬛"
-GAP = "▫️"
 STOP_WORDS = {"stop", "baigti", "quit", "giveup"}
 
 _recent: list[str] = []
@@ -82,27 +84,104 @@ def score(guess: str, target: str) -> list[str]:
     return result
 
 
-def letter_emoji(c: str) -> str:
-    if c.isdigit():
-        return f"{c}\ufe0f\u20e3"  # keycap 0️⃣-9️⃣
-    return chr(0x1F1E6 + ord(c) - ord("a"))
+# ---------------- board image ----------------
+
+FONT_PATH = os.path.join("assets", "fonts", "DejaVuSans-Bold.ttf")
+
+TILE = 58
+GAP = 6
+WORD_GAP = 22
+LINE_GAP = 6
+ROW_GAP = 20
+NUM_COL = 44
+PAD = 16
+MAX_LINE_CELLS = 12  # wrap long phrases by word so the board fits the embed
+
+COLORS = {
+    GREEN: (83, 141, 78),
+    YELLOW: (201, 170, 50),
+    GRAY: (70, 72, 76),
+}
+EMPTY_BORDER = (86, 87, 92)
+ACTIVE_BORDER = (150, 152, 158)
+NUMBER_COLOR = (150, 152, 158)
 
 
-def with_gaps(cells: list[str], target: str) -> str:
-    """Re-insert gaps where the target phrase has spaces. Cells are separated by a
-    zero-width space so regional-indicator letters never merge into flags."""
-    out, i = [], 0
-    for ch in target:
-        if ch == " ":
-            out.append(GAP)
-        else:
-            out.append(cells[i])
-            i += 1
-    return "​".join(out)
+@lru_cache(maxsize=8)
+def get_font(size: int):
+    try:
+        return ImageFont.truetype(FONT_PATH, size)
+    except OSError:
+        try:
+            return ImageFont.load_default(size=size)
+        except TypeError:
+            return ImageFont.load_default()
 
 
-def blank_row(target: str) -> str:
-    return with_gaps(["⬜"] * len(target.replace(" ", "")), target)
+def wrap_words(target: str) -> list[list[tuple[int, str]]]:
+    """Split the phrase into display lines of words. Each word is a list of
+    (letter_index, char) so we know which tile/score belongs where."""
+    lines, current, idx = [], [], 0
+    for word in target.split():
+        cells = [(idx + i, c) for i, c in enumerate(word)]
+        idx += len(word)
+        width = sum(len(w) for w in current) + len(current)  # +1 per space
+        if current and width + len(word) > MAX_LINE_CELLS:
+            lines.append(current)
+            current = []
+        current.append(cells)
+    if current:
+        lines.append(current)
+    return lines
+
+
+def line_width(line) -> int:
+    n = sum(len(w) for w in line)
+    return n * TILE + (n - len(line)) * GAP + (len(line) - 1) * WORD_GAP
+
+
+def render_board(game: "Game") -> io.BytesIO:
+    lines = wrap_words(game.target)
+    rows = list(game.rows)
+    show_active = not game.over
+    n_rows = len(rows) + (1 if show_active else 0)
+
+    block_h = len(lines) * TILE + (len(lines) - 1) * LINE_GAP
+    width = PAD * 2 + NUM_COL + max(line_width(l) for l in lines)
+    height = PAD * 2 + n_rows * block_h + (n_rows - 1) * ROW_GAP
+
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    letter_font = get_font(int(TILE * 0.55))
+    num_font = get_font(22)
+
+    for r in range(n_rows):
+        top = PAD + r * (block_h + ROW_GAP)
+        guess = rows[r] if r < len(rows) else None
+
+        draw.text((PAD + NUM_COL // 2 - 6, top + block_h / 2), str(r + 1),
+                  font=num_font, fill=NUMBER_COLOR, anchor="mm")
+
+        for li, line in enumerate(lines):
+            y = top + li * (TILE + LINE_GAP)
+            x = PAD + NUM_COL
+            for word in line:
+                for idx, _ in word:
+                    box = (x, y, x + TILE, y + TILE)
+                    if guess:
+                        word_str, tiles = guess
+                        draw.rounded_rectangle(box, radius=6, fill=COLORS[tiles[idx]])
+                        draw.text((x + TILE / 2, y + TILE / 2), word_str[idx].upper(),
+                                  font=letter_font, fill="white", anchor="mm")
+                    else:
+                        draw.rounded_rectangle(box, radius=6, outline=ACTIVE_BORDER, width=3)
+                    x += TILE + GAP
+                x += WORD_GAP - GAP
+
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    buf.seek(0)
+    return buf
 
 
 class Game:
@@ -131,14 +210,8 @@ class Game:
             elif t != GRAY:
                 self.present.add(c)
 
-    def board(self) -> str:
-        lines = []
-        for word, tiles in self.rows:
-            lines.append(with_gaps(tiles, self.target))
-            lines.append(with_gaps([letter_emoji(c) for c in word], self.target))
-        for _ in range(MAX_TRIES - len(self.rows)):
-            lines.append(blank_row(self.target))
-        return "\n".join(lines)
+    def file(self) -> discord.File:
+        return discord.File(render_board(self), filename="wordle.png")
 
     def embed(self, status: str = None, color: int = BRAND) -> discord.Embed:
         n = len(self.letters)
@@ -146,7 +219,8 @@ class Game:
         shape = f"**{n} simbolių**" + (f", **{words} žodžiai**" if words > 1 else "")
         embed = make_embed(f"🟩 Petro Wordle — {len(self.rows)}/{MAX_TRIES}", None, color)
         embed.set_author(name=self.player.display_name, icon_url=self.player.display_avatar.url)
-        embed.description = f"Atspėk Petro frazę: {shape}\n\n{self.board()}"
+        embed.description = f"Atspėk Petro frazę: {shape}"
+        embed.set_image(url="attachment://wordle.png")
         if self.absent:
             embed.add_field(name="🚫 Nėra", value=" ".join(sorted(self.absent)).upper(), inline=True)
         if self.present:
@@ -177,7 +251,7 @@ def setup_wordle_commands(bot: commands.Bot):
 
         game = Game(ctx.author, pick_word(words))
         _active_players.add(ctx.author.id)
-        board_msg = await ctx.send(embed=game.embed())
+        board_msg = await ctx.send(embed=game.embed(), file=game.file())
 
         def check(m: discord.Message) -> bool:
             return (
@@ -228,7 +302,7 @@ def setup_wordle_commands(bot: commands.Bot):
                     status, color = None, BRAND
 
                 # Re-send the board so it stays at the bottom of the chat
-                new_msg = await ctx.send(embed=game.embed(status, color))
+                new_msg = await ctx.send(embed=game.embed(status, color), file=game.file())
                 try:
                     await board_msg.delete()
                 except discord.HTTPException:
