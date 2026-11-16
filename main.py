@@ -9,7 +9,9 @@ import secrets
 from PIL import Image
 
 load_dotenv()
-token = os.getenv('DISCORD_TOKEN')
+token = (os.getenv('DISCORD_TOKEN') or '').strip().strip('"').strip("'")
+if not token:
+    raise SystemExit("DISCORD_TOKEN is missing. Create a .env file next to main.py with: DISCORD_TOKEN=your_token")
 
 handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
 intents = discord.Intents.default()
@@ -41,4 +43,4 @@ setup_gambling_commands(bot)
 async def on_ready():
     print(f"We are ready to go in, {bot.user.name}")
 
-bot.run(token, log_handler=handler, log_level=logging.DEBUG)
+bot.run(token, log_handler=handler, log_level=logging.INFO)

@@ -35,6 +35,7 @@ def setup_pete_commands(bot):
                 "• `.roll` – traukia random kortelę\n"
                 "• `.inventory` **username** – parodo kurias korteles turi\n"
                 "• `.view imageName` – leidžia peržiūrėti nuotraukas\n"
+                "• `.sw` – sweikhi lohai\n"
                 "**PRIDĖJIMO KOMANDOS**\n\n"
                 "• `.addmp4` + video – įkelia video į kolekciją\n"
                 "• `.addpete` + foto – įkelia nuotrauką į kolekciją\n",
@@ -59,6 +60,10 @@ def setup_pete_commands(bot):
         await ctx.send(embed=embed)
 
 
+
+    @bot.command()
+    async def sw(ctx):
+        await ctx.send("sweikhi lohai as grizhau")
 
     @bot.command()
     async def addpete(ctx):
