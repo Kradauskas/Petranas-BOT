@@ -227,7 +227,7 @@ class Game:
             embed.add_field(name="✅ Yra", value=" ".join(sorted(self.present)).upper(), inline=True)
         embed.add_field(
             name="Kaip žaisti",
-            value=status or "Tiesiog parašyk spėjimą į chatą. `stop` – pasiduoti.",
+            value=status or "Tiesiog parašyk spėjimą į chatą. `stop` arba `.stop` – pasiduoti.",
             inline=False,
         )
         return embed
@@ -257,7 +257,7 @@ def setup_wordle_commands(bot: commands.Bot):
             return (
                 m.author.id == ctx.author.id
                 and m.channel.id == ctx.channel.id
-                and not m.content.startswith(ctx.prefix or ".")
+                and (not m.content.startswith(ctx.prefix or ".") or normalize(m.content) in STOP_WORDS)
             )
 
         try:
