@@ -31,10 +31,10 @@ _active_players: set[int] = set()
 # ---------------- words ----------------
 
 def normalize(text: str) -> str:
-    """Lowercase, strip Lithuanian diacritics, keep only a-z and single spaces."""
+    """Lowercase, strip Lithuanian diacritics, keep only a-z, 0-9 and single spaces."""
     text = unicodedata.normalize("NFD", text.lower())
     text = "".join(c for c in text if not unicodedata.combining(c))
-    text = "".join(c if "a" <= c <= "z" else " " for c in text)
+    text = "".join(c if ("a" <= c <= "z" or "0" <= c <= "9") else " " for c in text)
     return " ".join(text.split())
 
 
@@ -83,6 +83,8 @@ def score(guess: str, target: str) -> list[str]:
 
 
 def letter_emoji(c: str) -> str:
+    if c.isdigit():
+        return f"{c}\ufe0f\u20e3"  # keycap 0️⃣-9️⃣
     return chr(0x1F1E6 + ord(c) - ord("a"))
 
 
@@ -141,7 +143,7 @@ class Game:
     def embed(self, status: str = None, color: int = BRAND) -> discord.Embed:
         n = len(self.letters)
         words = len(self.target.split())
-        shape = f"**{n} raidės**" + (f", **{words} žodžiai**" if words > 1 else "")
+        shape = f"**{n} simbolių**" + (f", **{words} žodžiai**" if words > 1 else "")
         embed = make_embed(f"🟩 Petro Wordle — {len(self.rows)}/{MAX_TRIES}", None, color)
         embed.set_author(name=self.player.display_name, icon_url=self.player.display_avatar.url)
         embed.description = f"Atspėk Petro frazę: {shape}\n\n{self.board()}"
@@ -202,7 +204,7 @@ def setup_wordle_commands(bot: commands.Bot):
                 guess = raw.replace(" ", "")
                 if len(guess) != len(game.letters):
                     await msg.reply(
-                        f"Reikia **{len(game.letters)}** raidžių (tu parašei {len(guess)}).",
+                        f"Reikia **{len(game.letters)}** simbolių (tu parašei {len(guess)}). Tarpai nesiskaičiuoja.",
                         delete_after=4, mention_author=False,
                     )
                     continue
