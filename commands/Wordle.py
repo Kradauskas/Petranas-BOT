@@ -4,6 +4,7 @@ import io
 import json
 import os
 import random
+import time
 import unicodedata
 from functools import lru_cache
 
@@ -27,7 +28,9 @@ GREEN, YELLOW, GRAY = "🟩", "🟨", "⬛"
 STOP_WORDS = {"stop", "baigti", "quit", "giveup"}
 
 _recent: list[str] = []
-_active_players: set[int] = set()
+_games: dict[int, "Game"] = {}        # user id -> running game
+_last_start: dict[int, float] = {}    # user id -> time of last new game (anti coin-farming)
+NEW_GAME_COOLDOWN = 60
 
 
 # ---------------- words ----------------
@@ -188,6 +191,8 @@ class Game:
     def __init__(self, player: discord.abc.User, target: str):
         self.player = player
         self.target = target
+        self.channel: discord.abc.Messageable = None
+        self.board_msg: discord.Message = None
         self.letters = target.replace(" ", "")
         self.rows: list[tuple[str, list[str]]] = []
         self.absent: set[str] = set()
@@ -227,7 +232,7 @@ class Game:
             embed.add_field(name="✅ Yra", value=" ".join(sorted(self.present)).upper(), inline=True)
         embed.add_field(
             name="Kaip žaisti",
-            value=status or "Tiesiog parašyk spėjimą į chatą. `stop` arba `.stop` – pasiduoti.",
+            value=status or "Tiesiog parašyk spėjimą į chatą. `.stop` – pasiduoti (veikia bet kur). `.wordle` kitam serveryje – perkelti žaidimą.",
             inline=False,
         )
         return embed
@@ -237,12 +242,53 @@ class Game:
 
 def setup_wordle_commands(bot: commands.Bot):
 
-    @bot.command(aliases=["pw", "petrowordle"])
-    @commands.cooldown(1, 60, commands.BucketType.user)
-    async def wordle(ctx: commands.Context):
-        if ctx.author.id in _active_players:
-            await ctx.send(embed=error("Jau žaidi!", "Pirma pabaik dabartinį žaidimą (arba parašyk `stop`)."))
+    async def show(game: "Game", status: str = None, color: int = BRAND, *, edit: bool = False):
+        """Post the board at the bottom of the game's channel (or edit it in place)."""
+        if edit and game.board_msg:
+            await game.board_msg.edit(embed=game.embed(status, color))
             return
+        new_msg = await game.channel.send(embed=game.embed(status, color), file=game.file())
+        if game.board_msg:
+            try:
+                await game.board_msg.delete()
+            except discord.HTTPException:
+                pass
+        game.board_msg = new_msg
+
+    def where(channel) -> str:
+        guild = getattr(channel, "guild", None)
+        return f"**{guild.name}** #{channel.name}" if guild else "DM"
+
+    async def move_game(ctx: commands.Context, game: "Game"):
+        old_msg = game.board_msg
+        game.channel = ctx.channel
+        game.board_msg = None
+        await show(game, "📦 Žaidimas perkeltas čia – tęsk spėjimus!")
+        if old_msg:
+            try:
+                await old_msg.edit(embed=make_embed(
+                    "📦 Wordle perkeltas",
+                    f"{game.player.display_name} tęsia žaidimą: {where(ctx.channel)}\n{game.board_msg.jump_url}",
+                    DARK,
+                ), attachments=[])
+            except discord.HTTPException:
+                pass
+
+    @bot.command(aliases=["pw", "petrowordle"])
+    async def wordle(ctx: commands.Context):
+        user_id = ctx.author.id
+        game = _games.get(user_id)
+
+        if game:
+            if game.channel.id == ctx.channel.id:
+                await ctx.send(embed=error("Jau žaidi čia!", "Rašyk spėjimą arba `.stop`."), delete_after=6)
+            else:
+                await move_game(ctx, game)
+            return
+
+        wait = NEW_GAME_COOLDOWN - (time.time() - _last_start.get(user_id, 0))
+        if wait > 0:
+            raise commands.CommandOnCooldown(commands.Cooldown(1, NEW_GAME_COOLDOWN), wait, commands.BucketType.user)
 
         words = load_words()
         if not words:
@@ -250,29 +296,35 @@ def setup_wordle_commands(bot: commands.Bot):
             return
 
         game = Game(ctx.author, pick_word(words))
-        _active_players.add(ctx.author.id)
-        board_msg = await ctx.send(embed=game.embed(), file=game.file())
+        game.channel = ctx.channel
+        _games[user_id] = game
+        _last_start[user_id] = time.time()
+        await show(game)
 
         def check(m: discord.Message) -> bool:
-            return (
-                m.author.id == ctx.author.id
-                and m.channel.id == ctx.channel.id
-                and (not m.content.startswith(ctx.prefix or ".") or normalize(m.content) in STOP_WORDS)
-            )
+            if m.author.id != user_id:
+                return False
+            if normalize(m.content) in STOP_WORDS:
+                return True  # stop works from any server/channel
+            return m.channel.id == game.channel.id and not m.content.startswith(ctx.prefix or ".")
 
         try:
             while not game.over:
                 try:
                     msg = await bot.wait_for("message", check=check, timeout=GUESS_TIMEOUT)
                 except asyncio.TimeoutError:
-                    await board_msg.edit(embed=game.embed(
-                        f"⏰ Laikas baigėsi! Atsakymas buvo **{game.target.upper()}**", ERROR))
+                    await show(game, f"⏰ Laikas baigėsi! Atsakymas buvo **{game.target.upper()}**", ERROR, edit=True)
                     return
 
                 raw = normalize(msg.content)
                 if raw in STOP_WORDS:
-                    await board_msg.edit(embed=game.embed(
-                        f"🏳️ Pasidavei. Atsakymas buvo **{game.target.upper()}**", ERROR))
+                    await show(game, f"🏳️ Pasidavei. Atsakymas buvo **{game.target.upper()}**", ERROR, edit=True)
+                    if msg.channel.id != game.channel.id:
+                        await msg.reply(embed=make_embed(
+                            "🏳️ Wordle sustabdytas",
+                            f"Žaidimas {where(game.channel)} baigtas. Atsakymas buvo **{game.target.upper()}**",
+                            ERROR,
+                        ), mention_author=False)
                     return
 
                 guess = raw.replace(" ", "")
@@ -292,24 +344,14 @@ def setup_wordle_commands(bot: commands.Bot):
                 if game.won:
                     tries = len(game.rows)
                     reward = (MAX_TRIES - tries + 1) * REWARD_PER_TRY_LEFT
-                    add_user_coins(str(ctx.author.id), reward)
-                    status = f"🎉 **{game.target.upper()}** – atspėjai per {tries}! +**{reward}** coins"
-                    color = SUCCESS
+                    add_user_coins(str(user_id), reward)
+                    await show(game, f"🎉 **{game.target.upper()}** – atspėjai per {tries}! +**{reward}** coins", SUCCESS)
                 elif game.over:
-                    status = f"💀 Nepavyko. Atsakymas buvo **{game.target.upper()}**"
-                    color = ERROR
+                    await show(game, f"💀 Nepavyko. Atsakymas buvo **{game.target.upper()}**", ERROR)
                 else:
-                    status, color = None, BRAND
-
-                # Re-send the board so it stays at the bottom of the chat
-                new_msg = await ctx.send(embed=game.embed(status, color), file=game.file())
-                try:
-                    await board_msg.delete()
-                except discord.HTTPException:
-                    pass
-                board_msg = new_msg
+                    await show(game)
         finally:
-            _active_players.discard(ctx.author.id)
+            _games.pop(user_id, None)
 
     @bot.command()
     @owner_only()
